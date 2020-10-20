@@ -5,7 +5,10 @@ import org.slf4j.Logger;
 import javax.annotation.Nonnull;
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Scanner;
+import java.util.concurrent.*;
 
 import static java.lang.Runtime.getRuntime;
 import static java.nio.charset.Charset.defaultCharset;
@@ -18,23 +21,56 @@ public class FileProcessor {
     public void process(@Nonnull String processingFileName, @Nonnull String resultFileName) {
         checkFileExists(processingFileName);
 
-        final File file = new File(processingFileName);
-        // TODO: NotImplemented: запускаем FileWriter в отдельном потоке
+        Exchanger<List<String>> exchanger = new Exchanger<>();
+        List<String> lines = new ArrayList<String>(CHUNK_SIZE);
+        List<String> linesAfterProcess = new ArrayList<String>(CHUNK_SIZE);
 
-        try (final Scanner scanner = new Scanner(file, defaultCharset())) {
+        final File fileIn = new File(processingFileName);
+        final File fileOut = new File(resultFileName);
+
+        LineProcessor lineProcessor = new LineCounterProcessor();
+        ExecutorService executorService = Executors.newFixedThreadPool(CHUNK_SIZE);
+
+        // запускаем FileWriter в отдельном потоке
+        Thread fileWriterThread = new Thread(new FileWriter(exchanger, fileOut, CHUNK_SIZE));
+        fileWriterThread.start();
+
+        try (final Scanner scanner = new Scanner(fileIn, defaultCharset())) {
             while (scanner.hasNext()) {
-                // TODO: NotImplemented: вычитываем CHUNK_SIZE строк для параллельной обработки
+                // вычитываем CHUNK_SIZE строк для параллельной обработки
+                while(lines.size()<CHUNK_SIZE && scanner.hasNextLine()) {
+                    String line = scanner.nextLine();
+                    lines.add(line);
+                }
 
-                // TODO: NotImplemented: обрабатывать строку с помощью LineProcessor. Каждый поток обрабатывает свою строку.
+                // обрабатывать строку с помощью LineProcessor. Каждый поток обрабатывает свою строку.
+                List<Callable<String>> tasks = new ArrayList<>(lines.size());
+                for (String l: lines) {
+                    Callable<String> c = () -> {return lineProcessor.process(l).toString("%1$s %2$s");};
+                    tasks.add(c);
+                }
+                List<Future<String>> results = executorService.invokeAll(tasks);
+                // получение обработанных строк из Future
+                for(Future<String> r: results) {
+                    linesAfterProcess.add(r.get());
+                }
 
-                // TODO: NotImplemented: добавить обработанные данные в результирующий файл
+                // добавить обработанные данные в результирующий файл
+                try {
+                    linesAfterProcess = exchanger.exchange(linesAfterProcess);
+                } catch (InterruptedException ie) {
+                    ie.printStackTrace();
+                }
+                // удаление старых записей из списка
+                lines.clear();
             }
-        } catch (IOException exception) {
+        } catch (IOException | InterruptedException | ExecutionException exception) {
             logger.error("", exception);
         }
 
-        // TODO: NotImplemented: остановить поток writerThread
-
+        // остановить поток writerThread
+        fileWriterThread.interrupt();
+        executorService.shutdown();
         logger.info("Finish main thread {}", Thread.currentThread().getName());
     }
 
