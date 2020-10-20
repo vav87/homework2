@@ -22,7 +22,6 @@ public class LineCounterProcessor implements LineProcessor<Integer> {
     public Pair<String, Integer> process(@Nonnull String line) {
         randomSleep();
         // подсчет кол-ва символов в строке + произвольная задержка randomSleep()
-        //System.out.println("LineCounterProcessor: processing: "+line);
         return Pair.of(line, line.length());
     }
 

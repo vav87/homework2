@@ -5,8 +5,6 @@ import org.slf4j.Logger;
 import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.BrokenBarrierException;
-import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.Exchanger;
 
 import static java.lang.Thread.currentThread;
@@ -16,16 +14,10 @@ public class FileWriter implements Runnable {
     private static final Logger logger = getLogger(FileWriter.class);
 
     private Exchanger<List<String>> exchanger;
-    //CyclicBarrier cb;
     private File outFile;
     private List<String> linesToPrint;
     private final int chunkSize;
 
-//    public FileWriter(Exchanger<List<String>> exchanger, CyclicBarrier cb, File outFile) {
-//        this.exchanger = exchanger;
-//        this.cb = cb;
-//        this.outFile = outFile;
-//    }
     public FileWriter(Exchanger<List<String>> exchanger, File outFile, int chunkSize) {
         this.exchanger = exchanger;
         this.outFile = outFile;
